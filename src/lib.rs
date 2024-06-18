@@ -139,6 +139,7 @@ impl LioPoint {
 
 pub fn transform_cloud(cloud: PointCloud2Msg, pose: &nalgebra::Isometry3<f64>) -> PointCloud2Msg {
     let cloud: ros_pointcloud2::PointCloud2Msg = cloud.into();
+    let cloud_header = cloud.header.clone();
     let it = cloud
         .try_into_vec()
         .unwrap()
@@ -153,7 +154,9 @@ pub fn transform_cloud(cloud: PointCloud2Msg, pose: &nalgebra::Isometry3<f64>) -
         })
         .collect();
 
-    PointCloud2Msg::try_from_vec(it).unwrap()
+    let mut out = PointCloud2Msg::try_from_vec(it).unwrap();
+    out.header = cloud_header;
+    out
 }
 
 #[cfg(test)]
