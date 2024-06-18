@@ -39,10 +39,42 @@ impl From<LioIsometry3d> for nalgebra::Isometry3<f64> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct RegistrationResult {
+    pub transform_target_to_source: nalgebra::Isometry3<f64>,
+    pub converged: bool,
+    pub num_iterations: i32,
+    pub num_inliers: i32,
+    pub fitness_score: f64,
+    pub h: nalgebra::Matrix6<f64>,
+    pub b: nalgebra::Vector6<f64>,
+}
+
+impl From<LioRegistrationResult> for RegistrationResult {
+    fn from(res: LioRegistrationResult) -> Self {
+        RegistrationResult {
+            transform_target_to_source: res.transform_target_to_source.into(),
+            converged: res.converged,
+            num_iterations: res.num_iterations,
+            num_inliers: res.num_inliers,
+            fitness_score: res.fitness_score,
+            h: nalgebra::Matrix6::from_iterator(res.h.iter().flatten().cloned()),
+            b: nalgebra::Vector6::from_iterator(res.b.iter().cloned()),
+        }
+    }
+}
+
 impl Map {
     pub fn new(voxel_size: f64) -> Self {
         Map {
             c_map: unsafe { init_map(voxel_size) },
+        }
+    }
+
+    pub fn reset(&mut self, voxel_size: f64) {
+        unsafe {
+            drop_map(self.c_map);
+            self.c_map = init_map(voxel_size);
         }
     }
 
@@ -65,8 +97,7 @@ impl Map {
         &mut self,
         cloud: &PointCloud2Msg,
         init_guess: &nalgebra::Isometry3<f64>,
-    ) -> nalgebra::Isometry3<f64> {
-        let mut out_transform: LioIsometry3d = nalgebra::Isometry3::identity().into();
+    ) -> RegistrationResult {
         let point_buffer = cloud.data.as_ptr() as *const LioPoint;
 
         unsafe {
@@ -75,11 +106,9 @@ impl Map {
                 point_buffer,
                 (cloud.dimensions.width * cloud.dimensions.height) as i32,
                 (*init_guess).into(),
-                &mut out_transform,
-            );
+            )
         }
-
-        out_transform.into()
+        .into()
     }
 }
 
@@ -202,9 +231,15 @@ mod tests {
         let src_cloud = read_pcl("test_clouds/test_P.pcd".to_string());
         let registered = map.register(&src_cloud, &init_pose);
 
-        println!("{}", registered.to_homogeneous());
+        println!(
+            "{}",
+            registered
+                .transform_target_to_source
+                .inverse()
+                .to_homogeneous()
+        );
 
-        /*let rot_deg = 8.0_f64;
+        let rot_deg = 8.0_f64;
         let tolerance = 1.0_f64;
         let rot = nalgebra::Rotation3::from_euler_angles(0.0, 0.0, rot_deg.to_radians());
         let rot_pose = nalgebra::Isometry3::from_parts(
@@ -216,9 +251,15 @@ mod tests {
         let registered = map.register(&transformed_map, &init_pose);
 
         assert_relative_eq!(
-            registered.rotation.euler_angles().2.to_degrees(),
+            registered
+                .transform_target_to_source
+                .inverse()
+                .rotation
+                .euler_angles()
+                .2
+                .to_degrees(),
             rot_deg,
             epsilon = tolerance
-        );*/
+        );
     }
 }

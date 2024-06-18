@@ -51,23 +51,11 @@ void add_to_map(void *map, const LioPoint *point_buffer, int num_points, LioIsom
     }
 
     state->voxelmap->insert(*cloud, transform);
-
-    /*int cloud_size = traits::size(*state->voxelmap);
-    auto map_cloud = std::make_shared<small_gicp::PointCloud>();
-    for (int i = 0; i < cloud_size; i++)
-    {
-        Eigen::Vector4d point = traits::point(*voxelmap, i);
-        map_cloud->point(i) << point.x(), point.y(), point.z(), 1.0;
-    }*/
-
-    // auto kdtree = std::make_shared<KdTree<PointCloud>>(map_cloud);
-    // estimate_normals_covariances(*map_cloud, *state->voxelmap, num_neighbors); // TODO omp with linking
-    // state->tree = kdtree;
 }
 
 // translation: xyz
 // rotation: quaternion xyzw
-void align(void *map, const LioPoint *point_buffer, int num_points, LioIsometry3d init_guess, LioIsometry3d *out)
+LioRegistrationResult align(void *map, const LioPoint *point_buffer, int num_points, LioIsometry3d init_guess)
 {
     State *state = reinterpret_cast<State *>(map);
     auto voxelmap = state->voxelmap;
@@ -81,8 +69,7 @@ void align(void *map, const LioPoint *point_buffer, int num_points, LioIsometry3
         cloud->point(i) << point_buffer[i].x, point_buffer[i].y, point_buffer[i].z, 1.0;
     }
 
-    auto kdtree = std::make_shared<KdTree<PointCloud>>(cloud);
-    estimate_normals_covariances(*cloud, *kdtree, num_neighbors); // TODO omp with linking
+    estimate_covariances_tbb(*cloud, num_neighbors);
 
     Eigen::Isometry3d init_guess_eigen = Eigen::Isometry3d::Identity();
     init_guess_eigen.translation() << init_guess.x, init_guess.y, init_guess.z;
@@ -91,17 +78,34 @@ void align(void *map, const LioPoint *point_buffer, int num_points, LioIsometry3
 
     Registration<GICPFactor, ParallelReductionTBB> registration;
     // align source to target cloud, so target is map, source is new cloud
-    auto result = registration.align(*state->voxelmap, *cloud, *kdtree, init_guess_eigen);
+    RegistrationResult result = registration.align(*state->voxelmap, *cloud, *state->voxelmap, init_guess_eigen);
 
-    out->x = result.T_target_source.translation().x();
-    out->y = result.T_target_source.translation().y();
-    out->z = result.T_target_source.translation().z();
+    LioRegistrationResult out;
+
+    out.transform_target_to_source.x = result.T_target_source.translation().x();
+    out.transform_target_to_source.y = result.T_target_source.translation().y();
+    out.transform_target_to_source.z = result.T_target_source.translation().z();
 
     Eigen::Quaterniond q2(result.T_target_source.rotation());
-    out->q_i = q2.x();
-    out->q_j = q2.y();
-    out->q_k = q2.z();
-    out->q_w = q2.w();
+    out.transform_target_to_source.q_i = q2.x();
+    out.transform_target_to_source.q_j = q2.y();
+    out.transform_target_to_source.q_k = q2.z();
+    out.transform_target_to_source.q_w = q2.w();
+
+    out.converged = result.converged;
+    out.num_iterations = result.iterations;
+    out.num_inliers = result.num_inliers;
+    out.fitness_score = result.error;
+    for (int i = 0; i < 6; i++)
+    {
+        for (int j = 0; j < 6; j++)
+        {
+            out.h[i][j] = result.H(i, j);
+        }
+        out.b[i] = result.b(i, 0);
+    }
+
+    return out;
 }
 
 int get_map_size(void *map)
