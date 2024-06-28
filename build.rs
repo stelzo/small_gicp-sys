@@ -54,7 +54,6 @@ fn main() {
         .warnings(false)
         .file("icp.cpp")
         .cpp(true)
-        .opt_level(3)
         .cpp_link_stdlib("stdc++")
         .flag_if_supported("-std=c++17")
         .compile("icp");
