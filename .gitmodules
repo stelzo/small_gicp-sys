@@ -1,3 +1,4 @@
 [submodule "small_gicp"]
 	path = small_gicp
 	url = https://github.com/koide3/small_gicp.git
+	depth = 1
