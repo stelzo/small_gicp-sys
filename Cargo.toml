@@ -4,9 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-nalgebra = "0.32.6"
-ros_pointcloud2 = "0.5.0"
-
+nalgebra = "0.33"
+ros_pointcloud2 = "0.5.1"
 
 [build-dependencies]
 bindgen = "0.69"
@@ -14,5 +13,5 @@ cc = "1"
 pkg-config = "0.3"
 
 [dev-dependencies]
-rand = "0.8.5"
-approx = "0.5.1"
+rand = "0.8"
+approx = "0.5"
