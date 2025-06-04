@@ -14,6 +14,10 @@ pub struct Map {
     c_map: *mut std::os::raw::c_void,
 }
 
+// TODO make sure pointer stays valid. in current implementation always the case
+unsafe impl Send for Map {}
+unsafe impl Sync for Map {}
+
 impl From<nalgebra::Isometry3<f64>> for LioIsometry3d {
     fn from(iso: nalgebra::Isometry3<f64>) -> Self {
         LioIsometry3d {
@@ -162,7 +166,7 @@ pub fn transform_cloud(cloud: PointCloud2Msg, pose: &nalgebra::Isometry3<f64>) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::Rng;
+    // use rand::Rng;
     use std::fs::File;
     use std::io::BufRead;
     use std::io::BufReader;
@@ -204,24 +208,24 @@ mod tests {
         PointCloud2Msg::try_from_iter(points).unwrap()
     }
 
-    pub fn generate_random_cloud(num_points: usize, min: f32, max: f32) -> Vec<PointXYZI> {
-        let mut rng = rand::thread_rng();
-        let mut pointcloud = Vec::with_capacity(num_points);
-        for _ in 0..num_points {
-            let point = PointXYZI {
-                x: rng.gen_range(min..max),
-                y: rng.gen_range(min..max),
-                z: rng.gen_range(min..max),
-                intensity: rng.gen_range(0.0..1.0),
-            };
-            pointcloud.push(point);
-        }
-        pointcloud
-    }
+    // pub fn generate_random_cloud(num_points: usize, min: f32, max: f32) -> Vec<PointXYZI> {
+    //     let mut rng = rand::thread_rng();
+    //     let mut pointcloud = Vec::with_capacity(num_points);
+    //     for _ in 0..num_points {
+    //         let point = PointXYZI {
+    //             x: rng.gen_range(min..max),
+    //             y: rng.gen_range(min..max),
+    //             z: rng.gen_range(min..max),
+    //             intensity: rng.gen_range(0.0..1.0),
+    //         };
+    //         pointcloud.push(point);
+    //     }
+    //     pointcloud
+    // }
 
-    pub fn generate_random_pointcloud(num_points: usize, min: f32, max: f32) -> PointCloud2Msg {
-        PointCloud2Msg::try_from_vec(generate_random_cloud(num_points, min, max)).unwrap()
-    }
+    // pub fn generate_random_pointcloud(num_points: usize, min: f32, max: f32) -> PointCloud2Msg {
+    //     PointCloud2Msg::try_from_vec(generate_random_cloud(num_points, min, max)).unwrap()
+    // }
 
     #[test]
     fn degree_rotation() {
