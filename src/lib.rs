@@ -84,14 +84,14 @@ impl Map {
 
     /// Assuming PointCloud2 to be in XYZ format, so can copy directly to C++.
     /// Data gets copied on C++ side, so no need to worry about lifetimes.
-    pub fn add(&mut self, cloud: &PointCloud2Msg, pose: Option<nalgebra::Isometry3<f64>>) {
+    pub fn add(&mut self, cloud: &[PointXYZ], pose: Option<nalgebra::Isometry3<f64>>) {
         let pose = pose.unwrap_or(nalgebra::Isometry3::identity());
 
         unsafe {
             add_to_map(
                 self.c_map,
-                cloud.data.as_ptr() as *const LioPoint,
-                (cloud.dimensions.width * cloud.dimensions.height) as i32,
+                cloud.as_ptr() as *const LioPoint,
+                cloud.len() as i32,
                 pose.into(),
             )
         };
@@ -99,16 +99,16 @@ impl Map {
 
     pub fn register(
         &mut self,
-        cloud: &PointCloud2Msg,
+        cloud: &[PointXYZ],
         init_guess: &nalgebra::Isometry3<f64>,
     ) -> RegistrationResult {
-        let point_buffer = cloud.data.as_ptr() as *const LioPoint;
+        let point_buffer = cloud.as_ptr() as *const LioPoint;
 
         unsafe {
             align(
                 self.c_map,
                 point_buffer,
-                (cloud.dimensions.width * cloud.dimensions.height) as i32,
+                cloud.len() as i32,
                 (*init_guess).into(),
             )
         }
@@ -161,6 +161,25 @@ pub fn transform_cloud(cloud: PointCloud2Msg, pose: &nalgebra::Isometry3<f64>) -
     let mut out = PointCloud2Msg::try_from_vec(it).unwrap();
     out.header = cloud_header;
     out
+}
+
+pub fn transform_cloud_native(
+    cloud: &[PointXYZ],
+    pose: &nalgebra::Isometry3<f64>,
+) -> Vec<PointXYZ> {
+    let it = cloud
+        .into_iter()
+        .map(|p: &PointXYZ| {
+            let t_p = pose * &nalgebra::Point3::new(p.x as f64, p.y as f64, p.z as f64);
+            PointXYZ {
+                x: t_p.x as f32,
+                y: t_p.y as f32,
+                z: t_p.z as f32,
+            }
+        })
+        .collect();
+
+    it
 }
 
 #[cfg(test)]
@@ -232,10 +251,12 @@ mod tests {
         let mut map = Map::new(0.15);
 
         let target_cloud = read_pcl("test_clouds/test_Q.pcd".to_string());
+        let target_cloud: Vec<PointXYZ> = target_cloud.try_into_vec().unwrap();
         let init_pose = nalgebra::Isometry3::identity();
         map.add(&target_cloud, Some(init_pose));
 
         let src_cloud = read_pcl("test_clouds/test_P.pcd".to_string());
+        let src_cloud: Vec<PointXYZ> = src_cloud.try_into_vec().unwrap();
         let registered = map.register(&src_cloud, &init_pose);
 
         println!(
@@ -254,7 +275,7 @@ mod tests {
             nalgebra::UnitQuaternion::from_rotation_matrix(&rot),
         );
 
-        let transformed_map = transform_cloud(target_cloud.clone(), &rot_pose);
+        let transformed_map = transform_cloud_native(&target_cloud, &rot_pose);
         let registered = map.register(&transformed_map, &init_pose);
 
         assert_relative_eq!(
